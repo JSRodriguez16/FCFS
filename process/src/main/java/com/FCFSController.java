@@ -4,8 +4,6 @@ import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.beans.property.SimpleStringProperty;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ListCell;
@@ -69,7 +67,7 @@ public class FCFSController {
 	@FXML
 	private Text resultText;
 
-	private final ObservableList<Proceso> procesos = FXCollections.observableArrayList();
+	private final ColaProcesos procesos = new ColaProcesos();
 	private Timeline simulationTimeline;
 	private Proceso procesoActivo;
 	private boolean simulationFinished;
@@ -89,8 +87,8 @@ public class FCFSController {
 			return new SimpleStringProperty(espera >= 0 ? String.valueOf(espera) : "-");
 		});
 
-		processListView.setItems(procesos);
-		processPlanifierTableView.setItems(procesos);
+		processListView.setItems(procesos.getListaObservable());
+		processPlanifierTableView.setItems(procesos.getListaObservable());
 
 		processListView.setCellFactory(listView -> new ListCell<>() {
 			@Override
@@ -148,8 +146,8 @@ public class FCFSController {
 			return;
 		}
 		int burst = burstSpinner.getValue();
-		Proceso nuevo = new Proceso(procesos.size() + 1, burst);
-		procesos.add(nuevo);
+		Proceso nuevo = new Proceso(procesos.tamaño() + 1, burst);
+		procesos.encolar(nuevo);
 		refreshViews();
 		updateButtonsByContent();
 	}
@@ -181,7 +179,7 @@ public class FCFSController {
 		if (seleccionado == null) {
 			return;
 		}
-		procesos.remove(seleccionado);
+		procesos.eliminar(seleccionado);
 		renumberProcesses();
 		processListView.getSelectionModel().clearSelection();
 		processText.setText("Nuevo Proceso");
@@ -192,7 +190,7 @@ public class FCFSController {
 
 	@FXML
 	private void start() {
-		if (procesos.isEmpty() || simulationIsRunning() || simulationFinished) {
+		if (procesos.estaVacia() || simulationIsRunning() || simulationFinished) {
 			return;
 		}
 
@@ -245,6 +243,7 @@ public class FCFSController {
 		processText.setText("Nuevo Proceso");
 		updateButtonsByContent();
 		updateSelectionState();
+		procesos.refrescar();
 		refreshViews();
 	}
 
@@ -255,12 +254,12 @@ public class FCFSController {
 	}
 
 	private void processSimulationTick() {
-		if (currentProcessIndex >= procesos.size()) {
+		if (currentProcessIndex >= procesos.tamaño()) {
 			finishSimulation();
 			return;
 		}
 
-		Proceso actual = procesos.get(currentProcessIndex);
+		Proceso actual = procesos.obtener(currentProcessIndex);
 		if (actual.getEstado().equals("Listo") && actual.getTiempoEspera() < 0) {
 			actual.setTiempoEspera(clockSecond - 1);
 		}
@@ -277,6 +276,7 @@ public class FCFSController {
 		}
 
 		clockSecond++;
+		procesos.refrescar();
 		refreshViews();
 	}
 
@@ -299,7 +299,7 @@ public class FCFSController {
 	}
 
 	private String buildFinalResultText() {
-		if (procesos.isEmpty()) {
+		if (procesos.estaVacia()) {
 			return "";
 		}
 
@@ -314,7 +314,7 @@ public class FCFSController {
 				.append("\n");
 		}
 
-		double promedio = totalEspera / procesos.size();
+		double promedio = totalEspera / procesos.tamaño();
 		builder.append("Tiempo promedio de espera: ")
 			.append(String.format("%.2f", promedio));
 		return builder.toString();
@@ -328,6 +328,7 @@ public class FCFSController {
 		}
 		simulationFinished = false;
 		resultText.setText("");
+		procesos.refrescar();
 		refreshViews();
 	}
 
@@ -336,8 +337,9 @@ public class FCFSController {
 	}
 
 	private void renumberProcesses() {
-		for (int i = 0; i < procesos.size(); i++) {
-			procesos.get(i).setPid(i + 1);
+		int pid = 1;
+		for (Proceso p : procesos) {
+			p.setPid(pid++);
 		}
 	}
 
@@ -355,14 +357,14 @@ public class FCFSController {
 			processText.setText(seleccionado.getNombreProceso());
 		}
 		if (!simulationFinished) {
-			startButton.setDisable(procesos.isEmpty());
+			startButton.setDisable(procesos.estaVacia());
 		}
-		stopResumeButton.setDisable(procesos.isEmpty());
-		restartButton.setDisable(procesos.isEmpty());
+		stopResumeButton.setDisable(procesos.estaVacia());
+		restartButton.setDisable(procesos.estaVacia());
 	}
 
 	private void updateButtonsByContent() {
-		if (procesos.isEmpty()) {
+		if (procesos.estaVacia()) {
 			startButton.setDisable(true);
 			stopResumeButton.setDisable(true);
 			restartButton.setDisable(true);
